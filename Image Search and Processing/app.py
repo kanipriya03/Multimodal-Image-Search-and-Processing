@@ -1,6 +1,4 @@
-
-#Final app.py till face_detection
-
+#app.py
 import streamlit as st
 import io
 import hashlib
@@ -21,9 +19,7 @@ try:
 except LookupError:
     nltk.download('wordnet')
     from nltk.corpus import wordnet
-
-
-# Initialize database and collections
+    
 db = get_db()
 images_collection, ocr_collection, caption_collection, object_collection, faces_collection, face_tags_collection, faces_with_boxes_collection = get_collections(db)
 def resize_image(image, max_size=(800, 800)):
@@ -66,13 +62,11 @@ def load_image_from_db(image_data):
 # Streamlit app
 st.title('Image Processing and Face Tagging')
 
-# Initialize session state variables
 if 'images_uploaded' not in st.session_state:
     st.session_state.images_uploaded = False
 if 'show_face_tagging' not in st.session_state:
     st.session_state.show_face_tagging = False
 
-# Upload ZIP file or single image
 uploaded_file = st.file_uploader("Choose a ZIP file or an image", type=["zip", "jpg", "jpeg", "png"])
 if uploaded_file is not None:
     if uploaded_file.name.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -147,22 +141,19 @@ if st.session_state.images_uploaded:
                     document_embedding = np.array(document['embedding'])
                     for query_embedding in query_embeddings:
                         similarity = cosine_similarity(query_embedding, document['embedding'])
-                        if similarity > 0.5:  # Adjust threshold as needed
+                        if similarity > 0.5: 
                             results.append((similarity, document))
-                            break  # Skip to next document if match is found
+                            break  
                 return sorted(results, key=lambda x: x[0], reverse=True)
 
-            # Perform similarity search
             ocr_results = find_similar_texts(ocr_collection, query_embeddings)
             caption_results = find_similar_texts(caption_collection, query_embeddings)
             object_results = find_similar_texts(object_collection, query_embeddings)
 
-            # Perform exact keyword search with case-insensitivity
             ocr_keyword_results = ocr_collection.find({"text": {"$regex": query, "$options": "i"}})
             caption_keyword_results = caption_collection.find({"caption": {"$regex": query, "$options": "i"}})
             object_keyword_results = object_collection.find({"objects.label": {"$regex": query, "$options": "i"}})
-
-            # Display results
+            
             displayed_hashes = set()
 
             for _, result in ocr_results:
@@ -223,10 +214,9 @@ if st.session_state.images_uploaded:
 
         def display_faces_grid(faces, enable_tagging=True):
             unique_face_ids = set()
-            cols = st.columns(4)  # Create 4 columns for the grid
-            displayed_faces = 0  # Track the number of displayed faces
+            cols = st.columns(4) 
+            displayed_faces = 0  
 
-            # Store faces in session state to avoid reloading
             if 'loaded_faces' not in st.session_state:
                 st.session_state.loaded_faces = faces
                 st.session_state.face_tagging_state = {}
@@ -235,30 +225,25 @@ if st.session_state.images_uploaded:
                 face_id = face.get('unique_id')
                 if face_id not in unique_face_ids:
                     unique_face_ids.add(face_id)
-                    image_data = face.get('face_image')  # Use 'image' instead of 'face_image'
+                    image_data = face.get('face_image') 
                     if image_data:
                         try:
                             img = Image.open(io.BytesIO(image_data))
-                            col = cols[displayed_faces % 4]  # Use the current column for display
+                            col = cols[displayed_faces % 4]  
                             with col:
                                 # Display the image
                                 st.image(img, caption=f"Face ID: {face_id}", use_column_width=True)
                                 
                                 if enable_tagging:
-                                    # Check if the tagging state for this face ID is initialized
                                     if face_id not in st.session_state.face_tagging_state:
                                         st.session_state.face_tagging_state[face_id] = False
-                                    # Add a "Tag Face" button below the image
                                     if st.button(f"Tag Face {face_id}", key=f"tag_button_{face_id}"):
                                         st.session_state[f"show_tagging_{face_id}"] = True
-
-                                    # If the "Tag Face" button is clicked, show the dropdown and input
+                                        
                                     if st.session_state.get(f"show_tagging_{face_id}", False):
-                                        # Dropdown to select an existing label
                                         existing_tags = get_existing_tags()
                                         selected_label = st.selectbox("Select label", options=existing_tags, key=f"selectbox_{face_id}")
-                                        
-                                        # Option to add a new label
+                                     
                                         add_new_label = st.checkbox("Add new label", key=f"add_new_{face_id}")
                                         if add_new_label:
                                             new_label = st.text_input("Enter new label", key=f"new_label_{face_id}")
@@ -269,12 +254,10 @@ if st.session_state.images_uploaded:
                                             label_to_use = new_label if new_label else selected_label
 
                                             if label_to_use:
-                                                # Tag the current face and similar faces
                                                 similar_faces = [f for f in st.session_state.loaded_faces if f.get('unique_id') == face_id]
                                                 for sim_face in similar_faces:
                                                     tag_face(label_to_use, sim_face.get('hash'), sim_face.get('unique_id'))
                                                 
-                                                # Count and display tagged faces
                                                 num_tagged_faces = len(similar_faces)
                                                 st.session_state[f"show_tagging_{face_id}"] = False
                         except Exception as e:
