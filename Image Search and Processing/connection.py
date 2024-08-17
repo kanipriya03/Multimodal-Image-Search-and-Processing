@@ -1,6 +1,4 @@
-# #connection.py
-
-
+#connection.py
 from pymongo import MongoClient
 
 def get_db():
@@ -15,5 +13,5 @@ def get_collections(db):
     object_collection = db['objects']
     faces_collection = db['faces']
     face_tags_collection = db['face_tags']
-    faces_with_boxes_collection = db['faces_with_boxes']  # New Collection
+    faces_with_boxes_collection = db['faces_with_boxes']  
     return images_collection, ocr_collection, caption_collection, object_collection, faces_collection, face_tags_collection, faces_with_boxes_collection
