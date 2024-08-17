@@ -14,12 +14,9 @@ import streamlit as st
 import face_recognition
 from connection import get_db, get_collections
 
-# Initialize database collections
 db = get_db()
 (images_collection, ocr_collection, caption_collection, object_collection, faces_collection, face_tags_collection, faces_with_boxes_collection) = get_collections(db)
 
-
-# Function to encode image to store in MongoDB
 def encode_image(image):
     if image.mode != 'RGB':
         image = image.convert('RGB')
@@ -45,38 +42,30 @@ def extract_images_from_zip(zip_file):
 def generate_unique_id():
     return str(faces_collection.count_documents({}) + 1)
 
-
-
-
 def upload_images(images):
     for filename, image, image_data in images:
         face_image = np.array(image)
         face_locations = face_recognition.face_locations(face_image)
         face_encodings = face_recognition.face_encodings(face_image, face_locations)
 
-        # Convert the entire image to bytes for storing in the collection
         img_bytes = encode_image(image)
         image_hash = hashlib.md5(img_bytes).hexdigest()
 
         for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
-            # Crop the face from the image
+
             face = face_image[top:bottom, left:right]
             face_pil_image = Image.fromarray(face)
             buffered = io.BytesIO()
             face_pil_image.save(buffered, format="JPEG")
             face_img_bytes = buffered.getvalue()
 
-            # Generate a hash for the cropped face
             face_hash = hashlib.md5(face_img_bytes).hexdigest()
 
-            # Check if the face already exists in the collection
             existing_face = faces_with_boxes_collection.find_one({"hash": face_hash})
 
             if existing_face:
-                # If a matching face exists, use the same unique_id
                 face_id = existing_face["unique_id"]
             else:
-                # Compare with existing encodings to find similar faces
                 similar_face_id = None
                 for existing_face in faces_with_boxes_collection.find():
                     existing_encoding = np.frombuffer(existing_face["encoding"], dtype=np.float64)
@@ -85,23 +74,19 @@ def upload_images(images):
                         break
 
                 if similar_face_id is None:
-                    # No match found, generate a new unique_id
                     face_id = generate_unique_id()
                 else:
-                    # Use the similar face's unique_id
                     face_id = similar_face_id
 
-            # Store the cropped face in the faces_with_boxes_collection
             faces_with_boxes_collection.insert_one({
-                "filename": filename,  # Store the original filename
-                "hash": face_hash,  # Store the hash of the cropped face
+                "filename": filename,  
+                "hash": face_hash, 
                 "face_image": Binary(face_img_bytes),
                 "face_location": {"top": top, "right": right, "bottom": bottom, "left": left},
-                "unique_id": face_id,  # Store the unique_id for the face
+                "unique_id": face_id,
                 "encoding": face_encoding.tobytes()
             })
 
-            # Also store or update the face information in the main faces_collection
             faces_collection.update_one(
                 {"hash": face_hash},
                 {"$set": {
@@ -110,10 +95,8 @@ def upload_images(images):
                     "face_encodings": [face_encoding.tolist()],
                     "unique_id": face_id
                 }},
-                upsert=True  # Create the document if it does not exist
+                upsert=True 
             )
-
-
 
 def group_similar_faces():
     face_groups = {}
@@ -141,12 +124,10 @@ def group_similar_faces():
                     )
     return face_groups
 
-
-
 def get_frequent_faces():
     face_ids = [doc['unique_id'] for doc in faces_collection.find({"unique_id": {"$exists": True}})]
-    face_counts = Counter(face_ids)  # Count occurrences of each unique_id
-    most_frequent_faces = face_counts.most_common(3)  # Get all counts in order of frequency
+    face_counts = Counter(face_ids) 
+    most_frequent_faces = face_counts.most_common(3) 
     
     frequent_faces = []
     for face_id, count in most_frequent_faces:
