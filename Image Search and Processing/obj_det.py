@@ -3,7 +3,6 @@ from transformers import AutoFeatureExtractor, AutoModelForObjectDetection
 from PIL import Image
 import torch
 
-# Object detection setup
 processor = AutoFeatureExtractor.from_pretrained("hustvl/yolos-tiny")
 model = AutoModelForObjectDetection.from_pretrained("hustvl/yolos-tiny")
 model_config = model.config
