@@ -1,0 +1,163 @@
+#face_detect.py
+import zipfile
+import os
+import uuid 
+import hashlib
+from PIL import Image
+from io import BytesIO
+import numpy as np
+import io
+import base64
+from bson.binary import Binary 
+from collections import Counter
+import streamlit as st
+import face_recognition
+from connection import get_db, get_collections
+
+# Initialize database collections
+db = get_db()
+(images_collection, ocr_collection, caption_collection, object_collection, faces_collection, face_tags_collection, faces_with_boxes_collection) = get_collections(db)
+
+
+# Function to encode image to store in MongoDB
+def encode_image(image):
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    buffered = io.BytesIO()
+    image.save(buffered, format="JPEG")
+    return buffered.getvalue()
+
+def extract_images_from_zip(zip_file):
+    images = []
+    try:
+        with zipfile.ZipFile(zip_file, 'r') as z:
+            for name in z.namelist():
+                if name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    image_data = z.read(name)
+                    image = Image.open(BytesIO(image_data))
+                    if image.mode != 'RGB':
+                        image = image.convert('RGB')
+                    images.append((name, image, image_data))
+    except zipfile.BadZipFile:
+        st.error("The uploaded file is not a valid ZIP file.")
+    return images
+
+def generate_unique_id():
+    return str(faces_collection.count_documents({}) + 1)
+
+
+
+
+def upload_images(images):
+    for filename, image, image_data in images:
+        face_image = np.array(image)
+        face_locations = face_recognition.face_locations(face_image)
+        face_encodings = face_recognition.face_encodings(face_image, face_locations)
+
+        # Convert the entire image to bytes for storing in the collection
+        img_bytes = encode_image(image)
+        image_hash = hashlib.md5(img_bytes).hexdigest()
+
+        for (top, right, bottom, left), face_encoding in zip(face_locations, face_encodings):
+            # Crop the face from the image
+            face = face_image[top:bottom, left:right]
+            face_pil_image = Image.fromarray(face)
+            buffered = io.BytesIO()
+            face_pil_image.save(buffered, format="JPEG")
+            face_img_bytes = buffered.getvalue()
+
+            # Generate a hash for the cropped face
+            face_hash = hashlib.md5(face_img_bytes).hexdigest()
+
+            # Check if the face already exists in the collection
+            existing_face = faces_with_boxes_collection.find_one({"hash": face_hash})
+
+            if existing_face:
+                # If a matching face exists, use the same unique_id
+                face_id = existing_face["unique_id"]
+            else:
+                # Compare with existing encodings to find similar faces
+                similar_face_id = None
+                for existing_face in faces_with_boxes_collection.find():
+                    existing_encoding = np.frombuffer(existing_face["encoding"], dtype=np.float64)
+                    if face_recognition.compare_faces([existing_encoding], face_encoding, tolerance=0.6)[0]:
+                        similar_face_id = existing_face["unique_id"]
+                        break
+
+                if similar_face_id is None:
+                    # No match found, generate a new unique_id
+                    face_id = generate_unique_id()
+                else:
+                    # Use the similar face's unique_id
+                    face_id = similar_face_id
+
+            # Store the cropped face in the faces_with_boxes_collection
+            faces_with_boxes_collection.insert_one({
+                "filename": filename,  # Store the original filename
+                "hash": face_hash,  # Store the hash of the cropped face
+                "face_image": Binary(face_img_bytes),
+                "face_location": {"top": top, "right": right, "bottom": bottom, "left": left},
+                "unique_id": face_id,  # Store the unique_id for the face
+                "encoding": face_encoding.tobytes()
+            })
+
+            # Also store or update the face information in the main faces_collection
+            faces_collection.update_one(
+                {"hash": face_hash},
+                {"$set": {
+                    "filename": filename,
+                    "image": Binary(img_bytes),
+                    "face_encodings": [face_encoding.tolist()],
+                    "unique_id": face_id
+                }},
+                upsert=True  # Create the document if it does not exist
+            )
+
+
+
+def group_similar_faces():
+    face_groups = {}
+    for doc in faces_collection.find():
+        encodings = [np.array(enc) for enc in doc['face_encodings']]
+        if encodings:
+            for encoding in encodings:
+                match_found = False
+                for face_id in face_groups.keys():
+                    matches = face_recognition.compare_faces(face_groups[face_id], encoding, tolerance=0.6)
+                    if True in matches:
+                        face_groups[face_id].append(encoding)
+                        faces_collection.update_one(
+                            {"hash": doc['hash']},
+                            {"$set": {"unique_id": face_id}}
+                        )
+                        match_found = True
+                        break
+                if not match_found:
+                    new_face_id = generate_unique_id()
+                    face_groups[new_face_id] = [encoding]
+                    faces_collection.update_one(
+                        {"hash": doc['hash']},
+                        {"$set": {"unique_id": new_face_id}}
+                    )
+    return face_groups
+
+
+
+def get_frequent_faces():
+    face_ids = [doc['unique_id'] for doc in faces_collection.find({"unique_id": {"$exists": True}})]
+    face_counts = Counter(face_ids)  # Count occurrences of each unique_id
+    most_frequent_faces = face_counts.most_common(3)  # Get all counts in order of frequency
+    
+    frequent_faces = []
+    for face_id, count in most_frequent_faces:
+        face_doc = faces_collection.find_one({"unique_id": face_id})
+        if face_doc:
+            # Ensure image data is in bytes
+            image_data = face_doc.get('image')
+            if isinstance(image_data, str):  # Check if the image is stored as base64 string
+                image_data = base64.b64decode(image_data)
+            
+            frequent_faces.append((face_id, count, image_data))
+    
+    return frequent_faces
+
