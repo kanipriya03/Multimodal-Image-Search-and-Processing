@@ -8,16 +8,12 @@ db = get_db()
 images_collection, ocr_collection, caption_collection, object_collection, faces_collection, face_tags_collection, faces_with_boxes_collection = get_collections(db)
 
 def retrieve_by_label(label):
-    # Retrieve faces with the given label from faces_collection
     matching_faces = faces_collection.find({"label": {"$regex": label, "$options": "i"}})
     faces_with_label = list(faces_collection.find({"label": {"$regex": label, "$options": "i"}}))
-    # Extract filenames from the matching faces
     filenames = {face.get("filename") for face in matching_faces}
     # Extract unique hashes from the faces
     image_hashes = {face.get("hash") for face in faces_with_label}
 
-    
-    # Retrieve and return images with those filenames from images_collection
     images = []
     for filename in filenames:
         image_doc = images_collection.find_one({"filename": filename})
@@ -37,27 +33,21 @@ def get_unique_faces():
     return unique_faces
 
 def get_existing_tags():
-    # Retrieve existing tags
     return list(face_tags_collection.distinct("label"))
 
 def tag_face(label, hash, unique_id):
-    # Find faces by hash and unique_id in faces_collection
     matching_faces = faces_collection.find({"hash": hash, "unique_id": unique_id,"label":label})
-    
-    # Tag each matching face with the provided label
     for face in matching_faces:
-        # Add to face_tags_collection for historical record
         face_tags_collection.insert_one({
             "label": label,
             "hash": face["hash"],
             "unique_id": face["unique_id"]
         })
-        
-        # Update faces_collection with the new label
+
         faces_collection.update_one(
             {"hash": face["hash"], "unique_id": face["unique_id"]},
             {"$set": {"label": label}},
-            upsert=True  # Ensure the document is created if it does not exist
+            upsert=True 
         )
 
     face_record = faces_collection.find_one({'unique_id': unique_id})
