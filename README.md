@@ -45,66 +45,6 @@ torch==2.0.0
 Pillow==10.0.0
 nltk==3.8.1
 
-## Setup
-
-1. **Clone the Repository:**
-    ```bash
-    git clone https://github.com/your-username/image-search-and-processing.git
-    cd image-search-and-processing
-    ```
-
-2. **Install Dependencies:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3. **Configure MongoDB:**
-    - **Local MongoDB:** Ensure MongoDB is running locally. The default connection string is `mongodb://localhost:27017/`.
-    - **MongoDB Atlas:** If using MongoDB Atlas, update the `connection.py` file with your Atlas connection string.
-
-## Usage
-
-1. **Start the Streamlit Application:**
-    ```bash
-    streamlit run app.py
-    ```
-
-2. **Open the Application:**
-    Navigate to `http://localhost:8501` in your web browser to interact with the application interface.
-
-## How to Use
-
-- **Upload Images:** Use the upload button in the Streamlit interface to upload images or ZIP files containing images.
-- **Process Images:** After uploading, the application will process the images, perform OCR, generate captions, detect objects, recognize faces, and allow tagging of faces in images with custom labels. The application automatically applies the same label to similar faces across the database. It supports case-insensitive and partial match searches to retrieve and display tagged images.
-- **Search Images:** Enter keywords in the search box to find images based on labels, extracted text, or detected faces.
-
-## File Descriptions
-
-- **`app.py`:** Main Streamlit application script. Handles the user interface, image uploads, and interactions.
-- **`caption.py`:** Contains functions for generating captions from images using the BLIP model.
-- **`connection.py`:** Manages the connection to MongoDB, including functions for database operations.
-- **`embeddings.py`:** Provides functions for generating and comparing text embeddings.
-- **`face_detect.py`:** Implements face detection algorithms using the `face_recognition` library.
-- **`face_tagging.py`:** Manages face tagging, including assigning and retrieving face labels.
-- **`obj_det.py`:** Implements object detection using YOLO models.
-- **`ocr.py`:** Handles Optical Character Recognition tasks, extracting text from images.
-- **`wordnet.py`:** Contains setup for NLTK WordNet, which can be used for lexical processing. This file may include functions for accessing and utilizing the WordNet lexical database, useful for enhancing text search capabilities by understanding the relationships between words and their synonyms.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a pull request or open an issue to discuss any changes or improvements.
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
