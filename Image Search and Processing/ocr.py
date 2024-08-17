@@ -5,20 +5,15 @@ import pytesseract
 
 def extract_text_from_image(image_bytes):
     try:
-        # Check if image_bytes is empty
         if not image_bytes:
             raise ValueError("No image data provided.")
-
-        # Attempt to open the image
         image = Image.open(io.BytesIO(image_bytes))
         
-        image.verify()  # Verify that the image is valid
+        image.verify() 
 
-        # Reopen the image after verification
         image = Image.open(io.BytesIO(image_bytes))
-        image.load()  # Load the image data
+        image.load() 
 
-        # Perform OCR processing
         text = pytesseract.image_to_string(image)
         return text
 
